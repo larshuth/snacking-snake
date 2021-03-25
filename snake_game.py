@@ -14,6 +14,7 @@ class Game:
         self.growing = growing
 
         self.reset()
+        self.fruit = [2, n-1]
 
         #print("It's alive")
         return
@@ -27,7 +28,7 @@ class Game:
         self.fruit = []  # 1, n]
         self.new_fruit()
 
-        self.step_limit = 3 * self.size * math.log(self.snakesize, 2)
+        self.step_limit = 50 #3 * self.size * math.log(self.snakesize, 2)
         self.step_countdown = self.step_limit
 
         self.score = 0
@@ -46,47 +47,49 @@ class Game:
         return self.snake_position_head[0], self.snake_position_head[1], self.fruit[0], self.fruit[1]
 
     def collision_indicators(self):
-        collision = np.zeros(5)
+        collision = [0]*5  # np.zeros(5)
         if self.snake_position_head[0] == 1 or \
                 (lambda x: [x[0] - 1, x[1]])(self.snake_position_head) in self.snake_position_body:  # north
             collision[0] = 1
-        if self.snake_position_head[1] == 1 or \
-                (lambda x: [x[0] + 1, x[1]])(self.snake_position_head) in self.snake_position_body:  # east
+        if self.snake_position_head[1] == self.size or \
+                (lambda x: [x[0], x[1]+1])(self.snake_position_head) in self.snake_position_body:  # east
             collision[1] = 1
         if self.snake_position_head[0] == self.size or \
-                (lambda x: [x[1] - 1, x[1]])(self.snake_position_head) in self.snake_position_body:  # south
+                (lambda x: [x[0] + 1, x[1]])(self.snake_position_head) in self.snake_position_body:  # south
             collision[2] = 1
-        if self.snake_position_head[1] == self.size or \
-                (lambda x: [x[1] + 1, x[1]])(self.snake_position_head) in self.snake_position_body:  # west
+        if self.snake_position_head[1] == 1 or \
+                (lambda x: [x[0], x[1]-1])(self.snake_position_head) in self.snake_position_body:  # west
             collision[3] = 1
-        if self.snake_position_head[0] % (self.size + 1) == 0 or self.snake_position_head[1] % (self.size + 1) == 0 or\
-                self.snake_position_head in self.snake_position_body:  # current body position occupied
+        if not self.alive:  # current body position occupied
             collision[4] = 1
-        return collision
+        return collision.copy()
 
     def state_as_distance_vector(self):
-        distance_vector = [self.snake_position_head[0] - self.fruit[0], self.snake_position_head[1] - self.fruit[1]]
+        distance_vector = [self.snake_position_head[0] - self.fruit[0] + self.size + 1, self.snake_position_head[1] - self.fruit[1] + self.size + 1]
         collision = self.collision_indicators()
         return distance_vector, collision
 
     def state_as_indicators(self):
         if self.snake_position_head[0] < self.fruit[0]:
-            indicator_y = 1
-        elif self.snake_position_head[0] == self.fruit[0]:
             indicator_y = 0
+        elif self.snake_position_head[0] == self.fruit[0]:
+            indicator_y = 1
         else:
-            indicator_y = -1
+            indicator_y = 2
         if self.snake_position_head[1] < self.fruit[1]:
-            indicator_x = 1
-        elif self.snake_position_head[1] == self.fruit[1]:
             indicator_x = 0
+        elif self.snake_position_head[1] == self.fruit[1]:
+            indicator_x = 1
         else:
-            indicator_x = -1
+            indicator_x = 2
 
         collision = self.collision_indicators()
         return [indicator_y, indicator_x], collision
 
     def update_state(self):
+        old_distance = math.sqrt(
+            (self.snake_position_head[0] - self.fruit[0]) ** 2 + (self.snake_position_head[1] - self.fruit[0]) ** 2)
+
         # update position of snake body
         self.snake_position_body.append(self.snake_position_head.copy())
         # update position of snake head
@@ -108,15 +111,14 @@ class Game:
 
         if collision_body:
             self.alive = False
-            self.score += -5
+            #self.score += -5
             #print("body collision", self.snake_position_head, self.snake_position_body)
         elif collision_wall:
             self.alive = False
-            self.score += -10
+            #self.score += -5
             #print("wall collision")
         elif starvation:
             self.alive = False
-            self.score += -20
 
         self.step_countdown -= 1
 
@@ -127,7 +129,16 @@ class Game:
             self.score += self.fruit_reward
             self.new_fruit()
             self.snakesize += 1
-            self.step_countdown = self.step_limit
+            #self.step_countdown = self.step_limit
+
+        # bonus reward for getting closer to the fruit and negative reward for getting firther away
+        new_distance = math.sqrt(
+            (self.snake_position_head[0] - self.fruit[0]) ** 2 + (self.snake_position_head[1] - self.fruit[0]) ** 2)
+        #print(new_distance == old_distance)
+        #if old_distance > new_distance:
+        #    self.score += 0.1
+        #else:
+        #    self.score += -0.1
 
         return
 
@@ -139,7 +150,10 @@ class Game:
 
         for x, y in self.snake_position_body:
             field[x][y] = "s"
-        field[self.snake_position_head[0]][self.snake_position_head[1]] = "S"
+        try:
+            field[self.snake_position_head[0]][self.snake_position_head[1]] = "S"
+        except:
+            print('Wall collision')
 
         field[self.fruit[0]][self.fruit[1]] = "o"
 
