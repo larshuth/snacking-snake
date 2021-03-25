@@ -16,6 +16,8 @@ class SnakeAgent:
         self.state_space = 7        # [dist y][dist x][obstacle north][east][south][west][current position]
         self.hidden_layer_nodes = hidden_layer_nodes
         self.network_model = self.buid_networm()
+        self.target_model = self.buid_networm()
+        self.target_model.set_weights(self.network_model.get_weights())
 
         self.game_size = game_size
         self.grow = growing
