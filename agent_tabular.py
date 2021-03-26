@@ -19,6 +19,7 @@ class SnakeTDAgent:
         self.game = snake_game.Game(n=self.game_size, growing=self.grow)
 
         self.epsilon, self.epsilon_decay, self.epsilon_min = epsilon, epsilon_decay, epsilon_min
+        self.working_epsilon = max(self.epsilon_min, self.epsilon)
         self.gamma, self.alpha = gamma, alpha
 
         if self.statespace == "Coordinates":
@@ -63,8 +64,8 @@ class SnakeTDAgent:
                                                 [0., 0., 0., 0.])
 
             self.state_function = self.game.state_as_distance_vector
-            self.learning_update_function = self.td_update_dist
-            self.action_choice = self.epsilon_action_choice_dist
+            self.learning_update_function = self.td_update_dist_and_indicators
+            self.action_choice = self.epsilon_action_choice_dist_and_indicators
 
         elif self.statespace == "Indicators":
             # initialize Q
@@ -86,8 +87,8 @@ class SnakeTDAgent:
                                                 [0., 0., 0., 0.])
 
             self.state_function = self.game.state_as_indicators
-            self.learning_update_function = self.td_update_indicators
-            self.action_choice = self.epsilon_action_choice_indicators
+            self.learning_update_function = self.td_update_dist_and_indicators
+            self.action_choice = self.epsilon_action_choice_dist_and_indicators
 
         else:
             print('!!! invalid statespace !!!')
@@ -141,48 +142,30 @@ class SnakeTDAgent:
 
         self.q_state_action_values[h_0][h_1][f_0][f_1][action] += update
 
-    def epsilon_action_choice_dist(self, state):
+    def epsilon_action_choice_dist_and_indicators(self, state):
         [dist_y, dist_x], [n, e, s, w, current] = state
         state_value = self.q_state_action_values[dist_y][dist_x][n][e][s][w][current]
 
         action = self.epsilon_action_choice(state_value)
         return action
 
-    def td_update_dist(self, old_score, state, action, next_state, next_action):
+    def td_update_dist_and_indicators(self, old_score, state, action, next_state, next_action):
         [dist_y, dist_x], [n, e, s, w, current] = state
         [dist_y_new, dist_x_new], [n_new, e_new, s_new, w_new, current_new] = next_state
 
-        next_state_action_value = self.q_state_action_values[dist_y_new][dist_x_new][n_new][e_new][s_new][w_new][current_new][
-                         next_action].copy()
-        state_action_value = self.q_state_action_values[dist_y][dist_x][n][e][s][w][current][next_action].copy()
+        next_state_action_value = \
+            self.q_state_action_values[dist_y_new][dist_x_new][n_new][e_new][s_new][w_new][current_new][
+                next_action].copy()
+        state_action_value = self.q_state_action_values[dist_y][dist_x][n][e][s][w][current][action].copy()
 
         update = self.td_update(old_score, state_action_value, next_state_action_value)
         self.q_state_action_values[dist_y][dist_x][n][e][s][w][current][action] += update
         return
 
-    def epsilon_action_choice_indicators(self, state):
-        [indicator_y, indicator_x], [n, e, s, w, current] = state
-        state_value = self.q_state_action_values[indicator_y][indicator_x][n][e][s][w][current]
-
-        action = self.epsilon_action_choice(state_value)
-        return action
-
-    def td_update_indicators(self, old_score, state, action, next_state, next_action):
-        [indicator_y, indicator_x], [n, e, s, w, current] = state
-        [indicator_y_new, indicator_x_new], [n_new, e_new, s_new, w_new, current_new] = next_state
-
-        next_state_action_value = \
-        self.q_state_action_values[indicator_y_new][indicator_x_new][n_new][e_new][s_new][w_new][current_new][
-            next_action].copy()
-        state_action_value = self.q_state_action_values[indicator_y][indicator_x][n][e][s][w][current][action].copy()
-
-        update = self.td_update(old_score, state_action_value, next_state_action_value)
-        self.q_state_action_values[indicator_y][indicator_x][n][e][s][w][current][action] += update
-        return
-
     def sarsa(self):
         self.working_epsilon = self.epsilon
         results = []
+        perfect_games = 0
         for i in range(self.episodes):
             self.game.reset()
             print(i)
@@ -210,31 +193,29 @@ class SnakeTDAgent:
                 state, action = next_state, next_action
             self.working_epsilon = max(self.epsilon_min, self.working_epsilon * self.epsilon_decay)
             results.append(self.game.score)
+            if self.game.score == 30:
+                perfect_games += 1
 
-        x = [(i // 100) for i in range(self.episodes)]
-        y = results  # [sum([results[j + (i * (self.episodes // 100))] for j in range(int(self.episodes // 100))]) / (
-                  #  self.episodes // 100) for i in range(100)]
+        print(perfect_games)
 
-        #plt.plot(x, y)
-        #plt.show()
+        x = [(i // 1000) for i in range(self.episodes)]
+        y = results
 
-        ax = sns.lineplot(x, y)
+        sns.lineplot(x, y)
         plt.show()
-
-        # plt.plot(range(self.episodes), results)
-        # plt.show()
 
         return
 
     def q_learning(self):
         self.working_epsilon = self.epsilon
         results = []
+        perfect_games = 0
         for i in range(self.episodes):
             self.game.reset()
             print(i)
 
             state = self.state_function()
-            #print(state)
+            # print(state)
 
             while self.game.alive:
                 # choosing action
@@ -249,7 +230,7 @@ class SnakeTDAgent:
                 # observe new state
                 next_state = self.state_function()
 
-                next_action = (next_state)
+                next_action = self.max_action_choice(next_state)
 
                 # Updating
                 self.learning_update_function(old_score, state, action, next_state, next_action)
@@ -257,18 +238,19 @@ class SnakeTDAgent:
                 state = next_state
             self.working_epsilon = max(self.epsilon_min, self.working_epsilon * self.epsilon_decay)
             results.append(self.game.score)
+            if self.game.score == 30:
+                perfect_games += 1
 
-        plt.plot([i * (self.episodes // 100) for i in range(100)], [
-            sum([results[j + (i * (self.episodes // 100))] for j in range(int(self.episodes // 100))]) / (
-                        self.episodes // 100) for i in range(100)])
+        print(perfect_games)
+
+        x = [(i // 1000) for i in range(self.episodes)]
+        y = results
+
+        sns.lineplot(x, y)
         plt.show()
-
-        #plt.plot(range(self.episodes), results)
-        #plt.show()
-
         return
 
-    def present_game(self, policy="greedy"):
+    def present_game(self):
         self.game.reset()
         self.working_epsilon = self.epsilon_min
         state = self.state_function()
@@ -280,7 +262,6 @@ class SnakeTDAgent:
             time.sleep(0.75)
             # choosing action
 
-            old_score = self.game.score
             self.game.direction = action
 
             self.game.update_state()
@@ -291,18 +272,20 @@ class SnakeTDAgent:
             state, action = next_state, next_action
             self.game.print_state()
             print(state, action)
+
         return
 
 
 methods = {"Q-Learning", "Sarsa"}
 space = {"Coordinates", "Distance and Collision", "Indicators"}
 
-test_agent = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=2500, growing=True, epsilon=1, epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+test_agent_s = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=100000, growing=True, epsilon=1,
+                            epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+test_agent_s.sarsa()
 
-# print(test_agent.q_state_action_values)
-test_agent.sarsa()
-test_agent.present_game()
-# print(test_agent.q_state_action_values)
+test_agent_q_l = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=100000, growing=True, epsilon=1,
+                              epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+test_agent_q_l.q_learning()
 
 epsilons = [0.1, 0.2]
 alphas = []

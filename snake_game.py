@@ -22,7 +22,7 @@ class Game:
     def reset(self):
         self.snake_position_head = [self.size // 2 + 1, self.size // 2 + 1]
         self.snake_position_body = [[self.size // 2, self.size // 2 + 1]]
-        self.snakesize = len(self.snake_position_body) + 1
+        self.snakesize = len(self.snake_position_body.copy()) + 1
         self.direction = 0
 
         self.fruit = []  # 1, n]
@@ -140,8 +140,13 @@ class Game:
 
         if self.snake_position_head == self.fruit:
             self.score += self.fruit_reward
+            if self.snakesize < 24:
+                self.snakesize += 1
+            else:
+                self.score += 6
+                self.alive = False
+
             self.new_fruit()
-            self.snakesize += 1
             #self.step_countdown = self.step_limit
 
         return
