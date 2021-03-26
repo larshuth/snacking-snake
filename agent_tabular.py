@@ -3,6 +3,7 @@ import snake_game
 import time
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 
 
 class SnakeTDAgent:
@@ -198,13 +199,16 @@ class SnakeTDAgent:
 
         print(perfect_games)
 
-        x = [(i // 1000) for i in range(self.episodes)]
-        y = results
+        #x = [(i // 200) for i in range(self.episodes)]
+        #y = results
 
-        sns.lineplot(x, y)
-        plt.show()
+        #sns.lineplot(x, y)
+        #plt.show()
 
-        return
+        average_over_hundred = [sum([results[j + (i * self.episodes // 100)] for j in range(int(self.episodes // 100))])/int(self.episodes // 100)
+                                for
+                                i in range(100)]
+        return average_over_hundred
 
     def q_learning(self):
         self.working_epsilon = self.epsilon
@@ -243,12 +247,15 @@ class SnakeTDAgent:
 
         print(perfect_games)
 
-        x = [(i // 1000) for i in range(self.episodes)]
-        y = results
+        #x = [(i // 200) for i in range(self.episodes)]
+        #y = results
 
-        sns.lineplot(x, y)
-        plt.show()
-        return
+        #sns.lineplot(x, y)
+        #plt.show()
+
+        average_over_hundred = [sum([results[j + (i*self.episodes//100)] for j in range(int(self.episodes//100))])/(self.episodes//100) for
+                                i in range(100)]
+        return average_over_hundred
 
     def present_game(self):
         self.game.reset()
@@ -279,13 +286,91 @@ class SnakeTDAgent:
 methods = {"Q-Learning", "Sarsa"}
 space = {"Coordinates", "Distance and Collision", "Indicators"}
 
-test_agent_s = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=100000, growing=True, epsilon=1,
-                            epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
-test_agent_s.sarsa()
+#test_agent_s = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
+#                            epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+#test_agent_s.sarsa()
 
-test_agent_q_l = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=100000, growing=True, epsilon=1,
-                              epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
-test_agent_q_l.q_learning()
+#test_agent_q_l = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
+#                              epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+#test_agent_q_l.q_learning()
 
-epsilons = [0.1, 0.2]
-alphas = []
+not_skip = False
+def compare_parameters():
+    rough_alphas = [0.005, 0.01, 0.05, 0.1, 0.15]  # 0.1 + (i * 0.2) for i in range(5)]
+    rough_gammas = [0.25, 0.275, 0.3, 0.325, 0.35]  # 0.1 + (i * 0.2) for i in range(5)]
+
+    fig, axes = plt.subplots(5, 5, sharex=True, sharey=True, figsize=(16, 8))
+    fig.suptitle('Testing parameters for the "Indicators" statespace on the Q-Learning algorithm')
+
+    ep = 5000
+
+    for i in range(len(rough_alphas)):
+        test_alpha = rough_alphas[i]
+        for j in range(len(rough_gammas)):
+            test_gamma = rough_gammas[j]
+
+            averages = {'Episodes': [i*(ep//100) for i in range(100)]}
+            for run in range(3):
+                agent = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=ep, growing=True, epsilon=1,
+                                     epsilon_decay=0.999, epsilon_min=0.1, gamma=test_gamma, alpha=test_alpha)
+                run = agent.q_learning().copy()
+                averages.update({str(run): run})
+            df = pd.DataFrame(averages)
+            print(df)
+            df = df.melt('Episodes', var_name='runs', value_name='averages')
+            g = sns.lineplot(ax=axes[i][j], x='Episodes', y='averages', hue='runs', data=df, legend=False)
+
+    cols = ['Alpha:  {}'.format(round(alpha, 2)) for alpha in rough_alphas]
+    rows = ['Gamma: {}'.format(round(gamma, 2)) for gamma in rough_gammas]
+
+    pad = 5  # in points
+
+    for ax, col in zip(axes[0], cols):
+        ax.annotate(col, xy=(0.5, 1), xytext=(0, pad),
+                    xycoords='axes fraction', textcoords='offset points',
+                    size='large', ha='center', va='baseline')
+
+    for ax, row in zip(axes[:, 0], rows):
+        ax.annotate(row, xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - pad, 0),
+                    xycoords=ax.yaxis.label, textcoords='offset points',
+                    size='large', ha='right', va='center')
+    plt.show()
+    return
+
+
+def compare_algorithms_and_statespaces():
+    #statespace algo alpha gamma
+    params = [#["Indicators", "Sarsa", 0.3, 0.3, 0, 0], ["Indicators", "Q", 0.3, 0.1, 0, 1],
+              ["Distance and Collision", "Sarsa", 0.7, 0.3, 0, 0], ["Distance and Collision", "Q", 0.1, 0.3, 0, 1]]
+
+    fig, axes = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(16, 8))
+    fig.suptitle('Testing parameters for the "Indicators" statespace on the Q-Learning algorithm')
+
+
+    for meters in params:
+        if meters[0] == "Distance and Collision":
+            ep = 150000
+        else:
+            ep = 3000
+        averages = {'Episodes': [i * (ep // 100) for i in range(100)]}
+        for run in range(3):
+            agent = SnakeTDAgent(statespace=meters[0], game_size=5, episodes=ep, growing=True, epsilon=1,
+                                 epsilon_decay=0.99, epsilon_min=0.1, gamma=meters[3], alpha=meters[2])
+            if meters[1] == "Sarsa":
+                run = agent.sarsa().copy()
+            else:
+                run = agent.q_learning().copy()
+            averages.update({str(run): run})
+        df = pd.DataFrame(averages)
+        #print(df)
+        df = df.melt('Episodes', var_name='runs', value_name='average reward per '+str(ep/100)+' episodes (games)')
+        axes[meters[5]].set_title(meters[1] + "  on  " + meters[0])
+        g = sns.lineplot(ax=axes[meters[5]], x='Episodes', y='average reward per '+str(ep/100)+' episodes (games)', hue='runs', data=df, legend=False)
+
+        pad = 5  # in points
+
+    plt.show()
+
+
+# compare_algorithms_and_statespaces()
+compare_parameters()

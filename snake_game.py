@@ -14,7 +14,7 @@ class Game:
         self.growing = growing
 
         self.reset()
-        self.fruit = [2, n-1]
+
 
         #print("It's alive")
         return
@@ -39,9 +39,14 @@ class Game:
 
     def new_fruit(self):
         new_fruit = self.snake_position_head
-        while new_fruit in self.snake_position_body + [self.snake_position_head]:
-            new_fruit = [random.randint(1, self.size), random.randint(1, self.size)]
+        counter = 0
+        all_positions = {(x, y) for x in range(1, self.size + 1) for y in range(1, self.size + 1)}
+        occupied_positions = {(x, y) for x in range(1, self.size + 1) for y in range(1, self.size + 1)
+                              if [x, y] in self.snake_position_body + [self.snake_position_head]}
+        possible_fruit = all_positions - occupied_positions
+        new_fruit = list(list(possible_fruit)[random.randint(0, len(possible_fruit) - 1)])
         self.fruit = new_fruit
+        return
     
     def state_as_positions(self):
         return self.snake_position_head[0], self.snake_position_head[1], self.fruit[0], self.fruit[1]
@@ -142,11 +147,11 @@ class Game:
             self.score += self.fruit_reward
             if self.snakesize < 24:
                 self.snakesize += 1
+                self.new_fruit()
             else:
                 self.score += 6
                 self.alive = False
 
-            self.new_fruit()
             #self.step_countdown = self.step_limit
 
         return
