@@ -163,7 +163,7 @@ class SnakeTDAgent:
         self.q_state_action_values[dist_y][dist_x][n][e][s][w][current][action] += update
         return
 
-    def sarsa(self):
+    def sarsa(self, averaged_stats=True):
         self.working_epsilon = self.epsilon
         results = []
         perfect_games = 0
@@ -205,12 +205,15 @@ class SnakeTDAgent:
         #sns.lineplot(x, y)
         #plt.show()
 
-        average_over_hundred = [sum([results[j + (i * self.episodes // 100)] for j in range(int(self.episodes // 100))])/int(self.episodes // 100)
-                                for
-                                i in range(100)]
-        return average_over_hundred
+        if averaged_stats:
+            average_over_hundred = [
+                sum([results[j + (i * self.episodes // 100)] for j in range(int(self.episodes // 100))]) / (
+                        self.episodes // 100) for i in range(100)]
+            return average_over_hundred
+        else:
+            return results
 
-    def q_learning(self):
+    def q_learning(self, averaged_stats=True):
         self.working_epsilon = self.epsilon
         results = []
         perfect_games = 0
@@ -253,9 +256,13 @@ class SnakeTDAgent:
         #sns.lineplot(x, y)
         #plt.show()
 
-        average_over_hundred = [sum([results[j + (i*self.episodes//100)] for j in range(int(self.episodes//100))])/(self.episodes//100) for
-                                i in range(100)]
-        return average_over_hundred
+        if averaged_stats:
+            average_over_hundred = [
+                sum([results[j + (i * self.episodes // 100)] for j in range(int(self.episodes // 100))]) / (
+                            self.episodes // 100) for i in range(100)]
+            return average_over_hundred
+        else:
+            return results
 
     def present_game(self):
         self.game.reset()
@@ -286,39 +293,55 @@ class SnakeTDAgent:
 methods = {"Q-Learning", "Sarsa"}
 space = {"Coordinates", "Distance and Collision", "Indicators"}
 
-#test_agent_s = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
-#                            epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
-#test_agent_s.sarsa()
+# test_agent_s = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
+#                             epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+# test_agent_s.sarsa()
 
-#test_agent_q_l = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
-#                              epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
-#test_agent_q_l.q_learning()
+# test_agent_q_l = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=20000, growing=True, epsilon=1,
+#                               epsilon_decay=0.99, epsilon_min=0.1, gamma=1, alpha=0.05)
+# test_agent_q_l.q_learning()
 
-not_skip = False
-def compare_parameters():
-    rough_alphas = [0.005, 0.01, 0.05, 0.1, 0.15]  # 0.1 + (i * 0.2) for i in range(5)]
-    rough_gammas = [0.25, 0.275, 0.3, 0.325, 0.35]  # 0.1 + (i * 0.2) for i in range(5)]
+
+def compare_parameters(lineplot=False, hist=100):
+    ep = 100000
+
+    rough_alphas = [0.1 + (i * 0.2) for i in range(5)]  # 0.005, 0.01, 0.05, 0.1, 0.15]
+    rough_gammas = [0.1 + (i * 0.2) for i in range(5)]  # 0.25, 0.275, 0.3, 0.325, 0.35]
 
     fig, axes = plt.subplots(5, 5, sharex=True, sharey=True, figsize=(16, 8))
-    fig.suptitle('Testing parameters for the "Indicators" statespace on the Q-Learning algorithm')
-
-    ep = 5000
+    if lineplot:
+        fig.suptitle('Testing parameters for the "Distance and Collision" statespace on the Sarsa algorithm.')
+    else:
+        fig.suptitle('Testing parameters for the "Distance and Collision" statespace on the Sarsa algorithm. Distribution of achieved scores over the last '+str(hist)+' games, averaged over 5 runs.')
 
     for i in range(len(rough_alphas)):
         test_alpha = rough_alphas[i]
         for j in range(len(rough_gammas)):
             test_gamma = rough_gammas[j]
 
-            averages = {'Episodes': [i*(ep//100) for i in range(100)]}
-            for run in range(3):
-                agent = SnakeTDAgent(statespace="Indicators", game_size=5, episodes=ep, growing=True, epsilon=1,
+            if lineplot:
+                averages = pd.DataFrame({'Episodes': [i*(ep//100) for i in range(100)]})    #[i for i in range(ep)]})
+            else:
+                averages = pd.DataFrame({'Episodes': [i for i in range(ep-hist, ep)]})  # [i for i in range(ep)]})
+
+            for run in range(5):
+                agent = SnakeTDAgent(statespace="Distance and Collision", game_size=5, episodes=ep, growing=True, epsilon=1,
                                      epsilon_decay=0.999, epsilon_min=0.1, gamma=test_gamma, alpha=test_alpha)
-                run = agent.q_learning().copy()
-                averages.update({str(run): run})
+                if lineplot:
+                    results = agent.q_learning(averaged_stats=True).copy()
+                    averages[str(run)] = results
+                    averages[str(run)] = averages[str(run)].rolling(5).mean()
+                else:
+                    results = agent.q_learning(averaged_stats=False).copy()
+                    averages[str(run)] = results[-hist:]
             df = pd.DataFrame(averages)
             print(df)
-            df = df.melt('Episodes', var_name='runs', value_name='averages')
-            g = sns.lineplot(ax=axes[i][j], x='Episodes', y='averages', hue='runs', data=df, legend=False)
+            if lineplot:
+                df = df.melt('Episodes', var_name='runs', value_name='average score')
+                g = sns.lineplot(ax=axes[i][j], x='Episodes', y='average score', hue='runs', data=df, legend=False)
+            else:
+                df = df.melt('Episodes', var_name='runs', value_name='Score')
+                g = sns.histplot(ax=axes[i][j], x='Score', stat='probability', data=df, legend=False)
 
     cols = ['Alpha:  {}'.format(round(alpha, 2)) for alpha in rough_alphas]
     rows = ['Gamma: {}'.format(round(gamma, 2)) for gamma in rough_gammas]
@@ -373,4 +396,4 @@ def compare_algorithms_and_statespaces():
 
 
 # compare_algorithms_and_statespaces()
-compare_parameters()
+compare_parameters(lineplot=False)
